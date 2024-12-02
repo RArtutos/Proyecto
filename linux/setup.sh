@@ -1,40 +1,49 @@
 #!/bin/bash
 
-# Install required packages
-sudo apt-get update
-sudo apt-get install -y \
-    python3-pip \
-    mysql-server \
-    python3-cryptography \
-    dialog
+# Source configuration
+source ./config.sh
 
-# Install Python dependencies
-pip3 install \
-    mysql-connector-python \
-    cryptography \
-    python-dialog
+# Function to check if a package is installed
+check_package() {
+    dpkg -l "$1" &> /dev/null
+}
+
+# Install required packages
+echo "Installing required packages..."
+PACKAGES="mysql-server python3-pip dialog openssl netcat"
+for pkg in $PACKAGES; do
+    if ! check_package "$pkg"; then
+        sudo apt-get install -y "$pkg"
+    fi
+done
+
+# Install Python packages
+pip3 install mysql-connector-python cryptography python-dialog
 
 # Create necessary directories
-sudo mkdir -p /var/lib/secure-files/{keys,files,logs}
+echo "Creating directories..."
+sudo mkdir -p "$KEY_STORE_PATH" "$FILE_PATH" "$LOG_PATH"
 sudo chmod 755 /var/lib/secure-files
-sudo chmod 700 /var/lib/secure-files/keys
+sudo chmod 700 "$KEY_STORE_PATH"
 
-# Initialize MySQL
+# Configure MySQL
+echo "Configuring MySQL..."
 sudo mysql_secure_installation
 
 # Create database and user
-sudo mysql -e "CREATE DATABASE IF NOT EXISTS secure_files;"
-sudo mysql -e "CREATE USER IF NOT EXISTS 'secure_files'@'localhost' IDENTIFIED BY 'password';"
-sudo mysql -e "GRANT ALL PRIVILEGES ON secure_files.* TO 'secure_files'@'localhost';"
+echo "Setting up database..."
+sudo mysql -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
+sudo mysql -e "CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
+sudo mysql -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';"
 sudo mysql -e "FLUSH PRIVILEGES;"
 
-# Initialize database tables
-python3 src/database/db_manager.py
-
 # Set up cron job for synchronization
-(crontab -l 2>/dev/null; echo "*/5 * * * * python3 /usr/local/bin/secure-files/sync_users.py") | crontab -
+(crontab -l 2>/dev/null; echo "*/5 * * * * $PWD/src/sync/sync_tasks.sh") | crontab -
 
-# Start HTTP server
-python3 src/http/server.py &
+# Make scripts executable
+chmod +x main.sh
+chmod +x src/http/server.sh
+chmod +x src/gui/main_menu.sh
+chmod +x src/sync/sync_tasks.sh
 
 echo "Setup completed successfully!"

@@ -1,37 +1,48 @@
-# Setup.ps1
+# Windows Setup Script
 param(
-    [string]$SqlServer = "localhost",
-    [string]$Database = "SecureFiles",
-    [string]$KeyStorePath = "C:\ProgramData\SecureFileSystem\keys",
-    [string]$LogPath = "C:\ProgramData\SecureFileSystem\logs"
+    [string]$ConfigPath = ".\config.json"
 )
 
-# Import required modules
-Import-Module SqlServer
+# Import configuration
+$config = Get-Content $ConfigPath | ConvertFrom-Json
 
 # Create necessary directories
 $directories = @(
-    $KeyStorePath,
-    $LogPath,
-    "C:\ProgramData\SecureFileSystem\files"
+    $config.keyStorePath,
+    $config.filePath,
+    $config.logPath
 )
 
 foreach ($dir in $directories) {
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force
+        Write-Host "Created directory: $dir"
     }
 }
 
-# Initialize database
-$dbManager = [DatabaseManager]::new($SqlServer, $Database)
-$dbManager.InitializeDatabase()
+# Install SQL Server if not present
+if (-not (Get-Service -Name "MSSQLSERVER" -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing SQL Server Express..."
+    # Download SQL Server Express
+    $url = "https://go.microsoft.com/fwlink/?LinkID=866658"
+    $outFile = "$env:TEMP\SQL2019-SSEI-Expr.exe"
+    Invoke-WebRequest -Uri $url -OutFile $outFile
+    
+    # Install SQL Server Express
+    Start-Process -FilePath $outFile -ArgumentList "/ACTION=Install /IACCEPTSQLSERVERLICENSETERMS /QUIET" -Wait
+}
 
-# Create scheduled task for synchronization
-$action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-File $PSScriptRoot\src\sync\SyncUsers.ps1"
-$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
-Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "SyncUsers" -Description "Synchronize users between Windows and Linux servers"
+# Configure SQL Server
+$sqlps = "SqlServer"
+if (-not (Get-Module -ListAvailable -Name $sqlps)) {
+    Install-Module -Name $sqlps -Force -AllowClobber
+}
 
-# Start HTTP server
-Start-Process powershell -ArgumentList "-File $PSScriptRoot\src\http\Server.ps1"
+# Create database
+$query = "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = '$($config.database)')
+          BEGIN
+              CREATE DATABASE [$($config.database)]
+          END"
+Invoke-Sqlcmd -Query $query -ServerInstance $config.sqlServer
 
 Write-Host "Setup completed successfully!"

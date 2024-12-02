@@ -1,0 +1,8 @@
+{
+    "sqlServer": "localhost",
+    "database": "SecureFiles",
+    "httpPort": 8080,
+    "keyStorePath": "C:\\ProgramData\\SecureFileSystem\\keys",
+    "filePath": "C:\\ProgramData\\SecureFileSystem\\files",
+    "logPath": "C:\\ProgramData\\SecureFileSystem\\logs"
+}
