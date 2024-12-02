@@ -3,10 +3,8 @@ param(
     [string]$ConfigPath = ".\config.json"
 )
 
-# Import required modules
-. "$PSScriptRoot\src\Config\ConfigManager.ps1"
-. "$PSScriptRoot\src\Database\DatabaseManager.ps1"
-. "$PSScriptRoot\src\GUI\MainWindow.ps1"
+# Import the SecureFileSystem module
+Import-Module "$PSScriptRoot\SecureFileSystem.psd1" -Force
 
 # Initialize configuration
 $config = [ConfigManager]::new($ConfigPath)

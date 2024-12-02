@@ -2,10 +2,13 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-. "$PSScriptRoot\..\ProcessManagement\ProcessManager.ps1"
-
 function Show-ProcessWindow {
-    $processManager = [ProcessManager]::new("http://localhost:8080")
+    param (
+        [Parameter(Mandatory=$true)]
+        [ConfigManager]$Config
+    )
+    
+    $processManager = [ProcessManager]::new("http://localhost:$($Config.HttpPort)")
     
     $form = New-Object System.Windows.Forms.Form
     $form.Text = "Process Manager"
@@ -58,5 +61,3 @@ function Update-ProcessList($gridView, $processManager) {
     $processes = $processManager.GetRemoteProcesses()
     $gridView.DataSource = $processes
 }
-
-Export-ModuleMember -Function Show-ProcessWindow

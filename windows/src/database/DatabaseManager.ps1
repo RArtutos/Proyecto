@@ -13,66 +13,80 @@ class DatabaseManager {
         $conn.Open()
         
         $cmd = $conn.CreateCommand()
+        
+        # Create Users table
         $cmd.CommandText = @"
-CREATE TABLE IF NOT EXISTS Users (
-    Id INT IDENTITY(1,1) PRIMARY KEY,
-    Username NVARCHAR(255) NOT NULL,
-    PublicKey NVARCHAR(MAX),
-    PrivateKey NVARCHAR(MAX),
-    CreatedDate DATETIME DEFAULT GETDATE(),
-    Origin NVARCHAR(10) DEFAULT 'Windows'
-);
-
-CREATE TABLE IF NOT EXISTS Files (
-    Id INT IDENTITY(1,1) PRIMARY KEY,
-    Filename NVARCHAR(255) NOT NULL,
-    IsEncrypted BIT DEFAULT 0,
-    IsSigned BIT DEFAULT 0,
-    Origin NVARCHAR(10) DEFAULT 'Windows',
-    CreatedDate DATETIME DEFAULT GETDATE()
-);
-
-CREATE TABLE IF NOT EXISTS Logs (
-    Id INT IDENTITY(1,1) PRIMARY KEY,
-    UserId INT,
-    Operation NVARCHAR(255),
-    Details NVARCHAR(MAX),
-    Timestamp DATETIME DEFAULT GETDATE(),
-    FOREIGN KEY (UserId) REFERENCES Users(Id)
-);
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Users]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[Users] (
+        [Id] INT IDENTITY(1,1) PRIMARY KEY,
+        [Username] NVARCHAR(255) NOT NULL,
+        [FullName] NVARCHAR(255) NOT NULL,
+        [Password] NVARCHAR(255) NOT NULL,
+        [Email] NVARCHAR(255),
+        [PublicKey] NVARCHAR(MAX),
+        [PrivateKey] NVARCHAR(MAX),
+        [CreatedDate] DATETIME DEFAULT GETDATE(),
+        [Origin] NVARCHAR(10) DEFAULT 'Windows'
+    )
+END
 "@
         $cmd.ExecuteNonQuery()
+
+        # Create Files table
+        $cmd.CommandText = @"
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Files]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[Files] (
+        [Id] INT IDENTITY(1,1) PRIMARY KEY,
+        [Filename] NVARCHAR(255) NOT NULL,
+        [OwnerId] INT NOT NULL,
+        [IsEncrypted] BIT DEFAULT 0,
+        [IsSigned] BIT DEFAULT 0,
+        [SignedBy] INT,
+        [Origin] NVARCHAR(10) DEFAULT 'Windows',
+        [CreatedDate] DATETIME DEFAULT GETDATE(),
+        FOREIGN KEY (OwnerId) REFERENCES Users(Id),
+        FOREIGN KEY (SignedBy) REFERENCES Users(Id)
+    )
+END
+"@
+        $cmd.ExecuteNonQuery()
+
+        # Create Logs table
+        $cmd.CommandText = @"
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Logs]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE [dbo].[Logs] (
+        [Id] INT IDENTITY(1,1) PRIMARY KEY,
+        [UserId] INT,
+        [Operation] NVARCHAR(255),
+        [Details] NVARCHAR(MAX),
+        [Timestamp] DATETIME DEFAULT GETDATE(),
+        FOREIGN KEY (UserId) REFERENCES Users(Id)
+    )
+END
+"@
+        $cmd.ExecuteNonQuery()
+        
         $conn.Close()
     }
-    
-    [void] AddUser([string]$username, [string]$publicKey, [string]$privateKey) {
+
+    [void] CreateUser([string]$username, [string]$fullName, [string]$password, [string]$email) {
         $conn = [SqlConnection]::new($this.ConnectionString)
         $conn.Open()
         
         $cmd = $conn.CreateCommand()
-        $cmd.CommandText = "INSERT INTO Users (Username, PublicKey, PrivateKey) VALUES (@username, @publicKey, @privateKey)"
+        $cmd.CommandText = @"
+INSERT INTO Users (Username, FullName, Password, Email) 
+VALUES (@username, @fullName, @password, @email)
+"@
         $cmd.Parameters.AddWithValue("@username", $username)
-        $cmd.Parameters.AddWithValue("@publicKey", $publicKey)
-        $cmd.Parameters.AddWithValue("@privateKey", $privateKey)
+        $cmd.Parameters.AddWithValue("@fullName", $fullName)
+        $cmd.Parameters.AddWithValue("@password", $password)
+        $cmd.Parameters.AddWithValue("@email", $email)
         
         $cmd.ExecuteNonQuery()
         $conn.Close()
     }
-    
-    [System.Data.DataTable] GetUsers() {
-        $conn = [SqlConnection]::new($this.ConnectionString)
-        $conn.Open()
-        
-        $cmd = $conn.CreateCommand()
-        $cmd.CommandText = "SELECT * FROM Users"
-        
-        $adapter = [SqlDataAdapter]::new($cmd)
-        $table = [System.Data.DataTable]::new()
-        $adapter.Fill($table)
-        
-        $conn.Close()
-        return $table
-    }
 }
-
-Export-ModuleMember -Function * -Variable *
